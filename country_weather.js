@@ -2,7 +2,7 @@ const fs = require('fs');
 const http = require('http');
 
 
-getWeather("vancouver");
+getWeather("yellow_knife");
 
 
 
@@ -17,6 +17,9 @@ var maxWidth = 20;
 var minWidth = 4;
 var index = 0;
 let segmentHeight = totalHeight/52;
+var carrier;
+var previousCarrier;
+
 
 //city can be toronto, montreal, vancouver, or yellow_knife
 function getWeather(city){
@@ -63,28 +66,35 @@ function makeShape(city){
 	let max = maxWidth;
 
 	
-	kCode += doCastOn(newArray[0], "3");
-	kCode += introduceOtherCarrier(newArray[0], "2");
-	kCode += introduceOtherCarrier(newArray[0], "1");
+	kCode += doCastOn(newArray[0], determineCarrier(precipArray[0]));
 	
 
 	for (var i = 0; i < newArray.length; i++){
 		let startTube = newArray[i];
 		let endTube = newArray[(i+1)%newArray.length];
-		let carrier = determineCarrier(precipArray[i]); 
+
+		carrier = determineCarrier(precipArray[i]);
+		let doRelease = false; 
+
+		if (carrier != previousCarrier && i > 0){
+			kCode += doCastOff(previousCarrier);
+			doRelease = true;
+			kCode += ("inhook " + carrier + "\n");
+		}
 
 		if (endTube > startTube) {
-			kCode += makeWider(startTube, endTube, carrier);
+			kCode += makeWider(startTube, endTube, carrier, doRelease);
 		} else if (endTube == startTube){
 
-			kCode += makeTube(startTube, endTube, carrier);
+			kCode += makeTube(startTube, endTube, carrier, doRelease);
 		} else {
-			kCode += makeNarrower(startTube, endTube, carrier);
+			kCode += makeNarrower(startTube, endTube, carrier, doRelease);
 		}
+
+		previousCarrier = carrier;
 	}
 	
-	kCode += doCastOff("3");
-	kCode += doCastOff("2");
+	kCode += doCastOff(carrier);
 
 	writeFile(kCode, city);
 
@@ -102,51 +112,13 @@ function determineCarrier(val){
 
 }
 
-
-function introduceOtherCarrier(val, carrier){
-	let code = "";
-	code += ("inhook " + carrier + "\n");
-	let min = maxWidth - val;
-	let max = maxWidth + val;
-	//cast-on on the front bed first...
-	for (let n = max; n >= min; --n) {
-		if ((max-n) % 2 == 0) {
-			code += ("knit - f" + n + " " + carrier + "\n");
-		}
-	}
-	for (let n = min; n <= max; ++n) {
-		if ((max-n) % 2 == 2) {
-			code += ("knit + f" + n + " " + carrier + "\n");
-		}
-	}
-
-	//and then on the back bed
-	for (let n = max; n >= min; --n) {
-		if ((max-n) % 2 == 0) {
-			code += ("knit - b" + n + " " + carrier + "\n");
-		}
-	}
-	for (let n = min; n <= max; ++n) {
-		if ((max-n) % 2 == 2) {
-			code += ("knit + b" + n + " " + carrier + "\n");
-		}
-	}
-
-	code += ("miss + f" + max + " " + carrier + "\n");
-
-	code += ("releasehook " + carrier + "\n");
-
-	return code;
-
-}
-
 function doCastOff(carrier){
 	let code = "";
 	code += ("outhook " + carrier + "\n");
 	return code;
 }
 
-function makeWider(_min, _max, carrier){
+function makeWider(_min, _max, carrier, doRelease){
 	let code = "";
 
 	let startingMin = maxWidth - _min;
@@ -192,13 +164,18 @@ function makeWider(_min, _max, carrier){
 			}
 		}
 
+		//release carrier hook before xfers
+		if (doRelease && i === 1){
+			code += ("releasehook " + carrier + "\n");
+		}
+
 		index ++;
 	}
 
 	return code;
 }
 
-function makeTube(_min, _max, carrier){
+function makeTube(_min, _max, carrier, doRelease){
 	let code = "";
 	let min = maxWidth - _min;
 	let max = maxWidth + _min;
@@ -218,12 +195,16 @@ function makeTube(_min, _max, carrier){
 				}
 			}
 		}
+
+		if (doRelease && i === 0){
+			code += ("releasehook " + carrier + "\n");
+		}
 		index ++;
 	}
 	return code;
 }
 
-function makeNarrower(_min, _max, carrier){
+function makeNarrower(_min, _max, carrier, doRelease){
 	let code = "";
 
 	let startingMin = maxWidth - _min;
@@ -255,6 +236,11 @@ function makeNarrower(_min, _max, carrier){
 			}
 		}
 
+		//release carrier hook before xfers
+		if (doRelease && i === 0){
+			code += ("releasehook " + carrier + "\n");
+		}
+
 		if (i % proportionDecreases === 0){
 			if ((actingMax - 2) >= endingMax){
 				code += rack([actingMax, actingMax - 2], "f", "-");
@@ -276,7 +262,7 @@ function makeNarrower(_min, _max, carrier){
 }
 
 //simple function to move a range of needles in a direction by transfering them to the opposing bed
-function rack(needles, bed, direction){
+function rack(needles, bed, direction, doRelease){
 	let secondBed = bed === "f" ? "b" : "f";
 
 	let code = "";
