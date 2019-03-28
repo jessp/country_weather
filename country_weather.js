@@ -1,34 +1,42 @@
 const fs = require('fs');
 const http = require('http');
 
-let country = "NOR";
-getWeather(country);
+
+getWeather("vancouver");
 
 
 
 var tempArray, precipArray;
-var totalHeight = 120; //multiple of 12
+var thresholds;
+
+var isWeatherReturned = false;
+var isThreshReturned = false;
+
+var totalHeight = 520; //multiple of 52
 var maxWidth = 20;
 var minWidth = 4;
 var index = 0;
-let segmentHeight = totalHeight/12;
+let segmentHeight = totalHeight/52;
 
-
-function getWeather(country){
-	doRequest(country, true, (e) => doNextStep(e, "temp"));
-	doRequest(country, false, (e) => doNextStep(e, "precip"));
+//city can be toronto, montreal, vancouver, or yellow_knife
+function getWeather(city){
+	doRequest("./formatted_data/" + city + ".json", (e) => doNextStep(e, "weather", city));
+	doRequest("./thresholds.json" , (e) => doNextStep(e, "thresh", city));
 }
 
-function doNextStep(newVal, type){
+function doNextStep(newVal, type, city){
 
-	if (type === "temp"){
-		tempArray = newVal;
-	} else if (type === "precip"){
-		precipArray = newVal;
+	if (type === "weather"){
+		isWeatherReturned = true;
+		precipArray = newVal["precipArray"];
+		tempArray = newVal["tempArray"];
+	} else if (type === "thresh"){
+		isThreshReturned = true;
+		thresholds = newVal;
 	}
 
-	if (tempArray && precipArray){
-		makeShape();
+	if (isThreshReturned && isWeatherReturned){
+		makeShape(city);
 	}
 	
 }
@@ -39,19 +47,16 @@ function scale(num, in_min, in_max, out_min, out_max) {
   	return evenNum;
 }
 
-function makeShape(){
+function makeShape(city){
 	let kCode = "";
-
-	let minVal = Math.min(...tempArray[0]["monthVals"]);
-	let maxVal = Math.max(...tempArray[0]["monthVals"]);
-	let meanPrecipiation = precipArray[0]["monthVals"].reduce((sume, el) => sume + el, 0) / precipArray[0]["monthVals"].length;
 
 
 	let newArray = [];
-	for (var i = 0; i < tempArray[0]["monthVals"].length; i++){
-		let newNum = scale(tempArray[0]["monthVals"][i], minVal, maxVal, minWidth, maxWidth);
+	for (var i = 0; i < tempArray.length; i++){
+		let newNum = scale(tempArray[i], thresholds["temp"][0], thresholds["temp"][1], minWidth, maxWidth);
 		newArray.push(newNum);
 	}
+
 	kCode += setup();
 
 	let min = 0;
@@ -60,12 +65,13 @@ function makeShape(){
 	
 	kCode += doCastOn(newArray[0], "3");
 	kCode += introduceOtherCarrier(newArray[0], "2");
+	kCode += introduceOtherCarrier(newArray[0], "1");
 	
 
 	for (var i = 0; i < newArray.length; i++){
 		let startTube = newArray[i];
 		let endTube = newArray[(i+1)%newArray.length];
-		let carrier = precipArray[0]["monthVals"][i] > meanPrecipiation ? "3" : "2"; 
+		let carrier = determineCarrier(precipArray[i]); 
 
 		if (endTube > startTube) {
 			kCode += makeWider(startTube, endTube, carrier);
@@ -80,9 +86,22 @@ function makeShape(){
 	kCode += doCastOff("3");
 	kCode += doCastOff("2");
 
-	writeFile(kCode, country);
+	writeFile(kCode, city);
 
 }
+
+function determineCarrier(val){
+
+	if (val < thresholds["precip"][0]){
+		return "3";
+	} else if (val < thresholds["precip"][1]){
+		return "2";
+	} else {
+		return "1";
+	}
+
+}
+
 
 function introduceOtherCarrier(val, carrier){
 	let code = "";
@@ -335,37 +354,21 @@ function doCastOn(val, carrier){
 
 
 
-function doRequest(country, isTemp, callback){
-	let url = "http://climatedataapi.worldbank.org/climateweb/rest/v1/country/mavg/bccr_bcm2_0/" + (isTemp ? "tas" : "pr") + "/1980/1999/" + country + ".json";
-	
-	getData(url, callback);
-}
+function doRequest(file, callback){
 
+	fs.readFile( file, function(err, data) {
+	  var json = JSON.parse(data);
 
-
-function getData(url, callback){
-	http.get(url, (resp) => {
-	  let data = '';
-
-	  // A chunk of data has been recieved.
-	  resp.on('data', (chunk) => {
-	    data += chunk;
-	  });
-
-	  // The whole response has been received. Print out the result.
-	  resp.on('end', () => {
-	    callback(JSON.parse(data));
-	  });
-
-	}).on("error", (err) => {
-	  console.log("Error: " + err.message);
+	  callback(json);
 	});
+
 }
 
 
-function writeFile(code, country){
+
+function writeFile(code, city){
 	//write to file
-	fs.writeFile("./../knitout-backend-swg/examples/in/country_weather_" + country + ".knitout", code, function(err) {
+	fs.writeFile("./../knitout-backend-swg/examples/in/country_weather_" + city + ".knitout", code, function(err) {
 	    if(err) {
 	        return console.log(err);
 	    }
