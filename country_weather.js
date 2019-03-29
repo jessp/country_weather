@@ -2,7 +2,7 @@ const fs = require('fs');
 const http = require('http');
 
 
-getWeather("yellow_knife");
+getWeather("montreal");
 
 
 
@@ -80,12 +80,21 @@ function makeShape(city){
 			kCode += doCastOff(previousCarrier);
 			doRelease = true;
 			kCode += ("inhook " + carrier + "\n");
+			/*
+			This is a hack.
+			By default "inhook" parks the yarn inserting hook before the first knitting 
+			operation. If we're increasing width, even if we releasehook before making any transfers,
+			we run the risk of getting an "inserting hook and knitting hook interfere" error.
+			So, we create a "miss" at the outside edge of where the knit object is.
+			*/
+			if (endTube > startTube){
+				kCode += ("miss - f" + (maxWidth * 2) + " " + carrier + "\n");
+			}
 		}
 
 		if (endTube > startTube) {
 			kCode += makeWider(startTube, endTube, carrier, doRelease);
 		} else if (endTube == startTube){
-
 			kCode += makeTube(startTube, endTube, carrier, doRelease);
 		} else {
 			kCode += makeNarrower(startTube, endTube, carrier, doRelease);
@@ -130,11 +139,11 @@ function makeWider(_min, _max, carrier, doRelease){
 	var actingMin = startingMin;
 	var actingMax = startingMax;
 
-	let numDecreases = Math.ceil(segmentHeight/(_max - _min));
-	let proportionDecreases = (numDecreases/segmentHeight) * segmentHeight;
+	let numDecreases = Math.ceil((segmentHeight)/(_max - _min));
+	let proportionDecreases = numDecreases/(segmentHeight) * (segmentHeight);
 
 
-	for (var i = 0; i < segmentHeight; i++){
+	for (var i = 0; i < (segmentHeight); i++){
 		if (index % 2 === 0){
 			for (let n = actingMax; n >= actingMin; --n) {
 				//remember we're knitting on every other needle
@@ -164,8 +173,7 @@ function makeWider(_min, _max, carrier, doRelease){
 			}
 		}
 
-		//release carrier hook before xfers
-		if (doRelease && i === 1){
+		if (doRelease && i === 0){
 			code += ("releasehook " + carrier + "\n");
 		}
 
@@ -332,6 +340,23 @@ function doCastOn(val, carrier){
 	code += ("miss + f" + max + " " + carrier + "\n");
 
 	code += ("releasehook " + carrier + "\n");
+
+	for (var i = 0; i < 2; i++){
+		if (i % 2 == 0) {
+			for (let n = max; n >= min; --n) {
+				//remember we're knitting on every other needle
+				if (n % 2 == 0){
+					code += ("knit - f" + n + " " + carrier + "\n");
+				}
+			}
+		} else {
+			for (let n = min; n <= max; ++n) {
+				if (n % 2 == 0){
+					code += ("knit + b" + n + " " + carrier + "\n");
+				}
+			}
+		}
+	}
 
 	return code;
 }
