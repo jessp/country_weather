@@ -35,14 +35,14 @@ function getThresh(){
 }
 
 function processThresh(pArray, tArray){
-	let tempMin = Math.min(...tArray);
-	let tempMax = Math.max(...tArray);
-	let q33 = quantile(pArray, .33);
-	let q67 = quantile(pArray, .67);
+	let precipMin = Math.min(...pArray);
+	let precipMax = Math.max(...pArray);
+	let q33 = quantile(tArray, .33);
+	let q67 = quantile(tArray, .67);
 
 	let thresh = {
-		"temp": [tempMin, tempMax],
-		"precip": [q33, q67]
+		"temp": [q33, q67],
+		"precip": [precipMin, precipMax]
 	}
 	writeThreshToFile(thresh);
 }

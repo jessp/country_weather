@@ -2,7 +2,7 @@ const fs = require('fs');
 const http = require('http');
 
 
-getWeather("montreal");
+getWeather("yellow_knife");
 
 
 
@@ -55,8 +55,8 @@ function makeShape(city){
 
 
 	let newArray = [];
-	for (var i = 0; i < tempArray.length; i++){
-		let newNum = scale(tempArray[i], thresholds["temp"][0], thresholds["temp"][1], minWidth, maxWidth);
+	for (var i = 0; i < precipArray.length; i++){
+		let newNum = scale(precipArray[i], thresholds["precip"][0], thresholds["precip"][1], minWidth, maxWidth);
 		newArray.push(newNum);
 	}
 
@@ -66,14 +66,14 @@ function makeShape(city){
 	let max = maxWidth;
 
 	
-	kCode += doCastOn(newArray[0], determineCarrier(precipArray[0]));
+	kCode += doCastOn(newArray[0], determineCarrier(tempArray[0]));
 	
 
 	for (var i = 0; i < newArray.length; i++){
 		let startTube = newArray[i];
 		let endTube = newArray[(i+1)%newArray.length];
 
-		carrier = determineCarrier(precipArray[i]);
+		carrier = determineCarrier(tempArray[i]);
 		let doRelease = false; 
 
 		if (carrier != previousCarrier && i > 0){
