@@ -12,13 +12,16 @@ var thresholds;
 var isWeatherReturned = false;
 var isThreshReturned = false;
 
-var totalHeight = 520; //multiple of 52
-var maxWidth = 20;
+let segmentHeight = 10;
+var totalHeight = 52 * segmentHeight; //multiple of 52
+var maxWidth = 14; //should be less than (segmentHeight/2 - 1) * 4
 var minWidth = 4;
 var index = 0;
-let segmentHeight = totalHeight/52;
 var carrier;
 var previousCarrier;
+
+let scrapYarn = "3";
+let nylonYarn = "4";
 
 
 //city can be toronto, montreal, vancouver, or yellow_knife
@@ -66,7 +69,7 @@ function makeShape(city){
 	let max = maxWidth;
 
 	
-	kCode += doCastOn(newArray[0], determineCarrier(tempArray[0]));
+	kCode += doCastOn(newArray[0]);
 	
 
 	for (var i = 0; i < newArray.length; i++){
@@ -76,8 +79,12 @@ function makeShape(city){
 		carrier = determineCarrier(tempArray[i]);
 		let doRelease = false; 
 
-		if (carrier != previousCarrier && i > 0){
-			kCode += doCastOff(previousCarrier);
+		if (carrier != previousCarrier){
+
+			if (i > 0){
+				kCode += doCastOff(previousCarrier);
+			}
+
 			doRelease = true;
 			kCode += ("inhook " + carrier + "\n");
 			/*
@@ -87,9 +94,7 @@ function makeShape(city){
 			we run the risk of getting an "inserting hook and knitting hook interfere" error.
 			So, we create a "miss" at the outside edge of where the knit object is.
 			*/
-			if (endTube > startTube){
-				kCode += ("miss - f" + (maxWidth * 2) + " " + carrier + "\n");
-			}
+			kCode += ("miss - f" + (maxWidth * 2) + " " + carrier + "\n");
 		}
 
 		if (endTube > startTube) {
@@ -105,15 +110,26 @@ function makeShape(city){
 	
 	kCode += doCastOff(carrier);
 
+	//knit with nylon yarn
+	kCode += ("inhook " + nylonYarn + "\n");
+	kCode += knitPlainStitches(nylonYarn, 8, (maxWidth - newArray[0]), (maxWidth + newArray[0]), true);
+	kCode += doCastOff(nylonYarn);
+
+	//knit with scrap yarn
+	kCode += ("inhook " + scrapYarn + "\n");
+	kCode += knitPlainStitches(scrapYarn, 8, (maxWidth - newArray[0]), (maxWidth + newArray[0]), true);
+	kCode += doCastOff(scrapYarn);
+
+
 	writeFile(kCode, city);
 
 }
 
 function determineCarrier(val){
 
-	if (val < thresholds["precip"][0]){
+	if (val < thresholds["temp"][0]){
 		return "3";
-	} else if (val < thresholds["precip"][1]){
+	} else if (val < thresholds["temp"][1]){
 		return "2";
 	} else {
 		return "1";
@@ -121,11 +137,6 @@ function determineCarrier(val){
 
 }
 
-function doCastOff(carrier){
-	let code = "";
-	code += ("outhook " + carrier + "\n");
-	return code;
-}
 
 function makeWider(_min, _max, carrier, doRelease){
 	let code = "";
@@ -148,7 +159,11 @@ function makeWider(_min, _max, carrier, doRelease){
 			for (let n = actingMax; n >= actingMin; --n) {
 				//remember we're knitting on every other needle
 				if (n % 2 == 0){
-					code += ("knit - f" + n + " " + carrier + "\n");
+					if (doRelease && i === 0 && n === 0){
+						code += ("tuck - f" + n + " " + carrier + "\n");
+					} else {
+						code += ("knit - f" + n + " " + carrier + "\n");
+					}
 				}
 			}
 		} else {
@@ -193,7 +208,11 @@ function makeTube(_min, _max, carrier, doRelease){
 			for (let n = max; n >= min; --n) {
 				//remember we're knitting on every other needle
 				if (n % 2 == 0){
-					code += ("knit - f" + n + " " + carrier + "\n");
+					if (doRelease && i === 0 && n === 0){
+						code += ("tuck - f" + n + " " + carrier + "\n");
+					} else {
+						code += ("knit - f" + n + " " + carrier + "\n");
+					}
 				}
 			}
 		} else {
@@ -233,7 +252,11 @@ function makeNarrower(_min, _max, carrier, doRelease){
 			for (let n = actingMax; n >= actingMin; --n) {
 				//remember we're knitting on every other needle
 				if (n % 2 == 0){
-					code += ("knit - f" + n + " " + carrier + "\n");
+					if (doRelease && i === 0 && n === 0){
+						code += ("tuck - f" + n + " " + carrier + "\n");
+					} else {
+						code += ("knit - f" + n + " " + carrier + "\n");
+					}
 				}
 			}
 		} else {
@@ -308,11 +331,15 @@ function setup(){
 	return code;
 }
 
-function doCastOn(val, carrier){
+
+//alternate tucks cast on with knitting with waste yarn and nylon
+function doCastOn(val){
 	let code = "";
+	let carrier = scrapYarn;
 	code += ("inhook " + carrier + "\n");
 	let min = maxWidth - val;
 	let max = maxWidth + val;
+	
 	//cast-on on the front bed first...
 	for (let n = max; n >= min; --n) {
 		if ((max-n) % 4 == 0) {
@@ -341,7 +368,28 @@ function doCastOn(val, carrier){
 
 	code += ("releasehook " + carrier + "\n");
 
-	for (var i = 0; i < 2; i++){
+	//knit with scrap yarn
+	code += knitPlainStitches(carrier, 8, min, max, false);
+	code += doCastOff(carrier);
+
+	//knit with the nylon
+	code += ("inhook " + nylonYarn + "\n");
+	code += knitPlainStitches(nylonYarn, 4, min, max, true);
+	code += doCastOff(nylonYarn);
+
+	return code;
+}
+
+function doCastOff(carrier){
+	let code = "";
+	code += ("outhook " + carrier + "\n");
+	return code;
+}
+
+function knitPlainStitches(carrier, rows, min, max, doRelease){
+	let code = "";
+	//knit some rows with wasteYarn;
+	for (var i = 0; i < rows; i++){
 		if (i % 2 == 0) {
 			for (let n = max; n >= min; --n) {
 				//remember we're knitting on every other needle
@@ -356,11 +404,13 @@ function doCastOn(val, carrier){
 				}
 			}
 		}
-	}
 
+		if (doRelease && i === 0){
+			code += ("releasehook " + carrier + "\n");
+		}
+	}
 	return code;
 }
-
 
 
 
